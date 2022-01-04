@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"open-cluster-management.io/registration/pkg/hub/taints"
 	"time"
 
 	addonclient "open-cluster-management.io/api/client/addon/clientset/versioned"
@@ -68,6 +69,13 @@ func RunControllerManager(ctx context.Context, controllerContext *controllercmd.
 		controllerContext.EventRecorder,
 	)
 
+	taintsController := taints.NewTaintsController(
+		kubeClient,
+		clusterClient,
+		clusterInformers.Cluster().V1().ManagedClusters(),
+		controllerContext.EventRecorder,
+	)
+
 	csrController := csr.NewCSRApprovingController(
 		kubeClient,
 		kubeInfomers.Certificates().V1().CertificateSigningRequests(),
@@ -127,6 +135,7 @@ func RunControllerManager(ctx context.Context, controllerContext *controllercmd.
 	go addOnInformers.Start(ctx.Done())
 
 	go managedClusterController.Run(ctx, 1)
+	go taintsController.Run(ctx, 1)
 	go csrController.Run(ctx, 1)
 	go leaseController.Run(ctx, 1)
 	go rbacFinalizerController.Run(ctx, 1)

@@ -69,7 +69,6 @@ func NewManagedClusterController(
 }
 
 func (c *managedClusterController) sync(ctx context.Context, syncCtx factory.SyncContext) error {
-	// just a test
 	managedClusterName := syncCtx.QueueKey()
 	klog.V(4).Infof("Reconciling ManagedCluster %s", managedClusterName)
 	managedCluster, err := c.clusterLister.Get(managedClusterName)

@@ -108,6 +108,16 @@ func AssertFinalizers(t *testing.T, obj runtime.Object, finalizers []string) {
 	}
 }
 
+// AssertTaints asserts the given runtime object has the expected taints
+func AssertTaints(t *testing.T, actualTaints []clusterv1.Taint, expectTaints []clusterv1.Taint) {
+	if len(actualTaints) != len(expectTaints) {
+		t.Errorf("expected taints len is %d, but actual len is %d", len(expectTaints), len(actualTaints))
+	}
+	if !reflect.DeepEqual(actualTaints, expectTaints) {
+		t.Errorf("expected taints %#v, but expectTaints: %#v", expectTaints, actualTaints)
+	}
+}
+
 // AssertManagedClusterCondition asserts the actual managed cluster conditions has
 // the expected condition
 func AssertManagedClusterCondition(
