@@ -2,7 +2,6 @@ package taints
 
 import (
 	"context"
-	"fmt"
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -67,8 +66,6 @@ func (c *taintsController) sync(ctx context.Context, syncCtx factory.SyncContext
 	managedCluster = managedCluster.DeepCopy()
 	newTaints := managedCluster.Spec.Taints
 
-	fmt.Printf("!!! taintsController start. cluster : %+v\n", managedCluster)
-
 	switch {
 	case meta.IsStatusConditionTrue(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable):
 		newTaints, _ = c.deleteTaintAndJudgeExist(newTaints, "",
@@ -114,9 +111,7 @@ func (c *taintsController) sync(ctx context.Context, syncCtx factory.SyncContext
 	}
 
 	managedCluster.Spec.Taints = newTaints
-	fmt.Printf("!!! before update. cluster : %+v\n", managedCluster.Spec.Taints)
 	managedCluster, err = c.clusterClient.ClusterV1().ManagedClusters().Update(ctx, managedCluster, metav1.UpdateOptions{})
-	fmt.Printf("!!! after update. cluster : %+v\n", managedCluster.Spec.Taints)
 	return err
 }
 
