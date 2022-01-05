@@ -3,8 +3,6 @@ package taints
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -17,6 +15,13 @@ import (
 	informerv1 "open-cluster-management.io/api/client/cluster/informers/externalversions/cluster/v1"
 	listerv1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1"
 	v1 "open-cluster-management.io/api/cluster/v1"
+	"time"
+)
+
+const (
+	NoCondition      = "NoManagedClusterConditionAvailable"
+	ConditionUnknown = "ManagedClusterConditionAvailableUnknown"
+	ConditionFalse   = "ManagedClusterConditionAvailableFalse"
 )
 
 // taintsController
@@ -59,23 +64,23 @@ func (c *taintsController) sync(ctx context.Context, syncCtx factory.SyncContext
 	if err != nil {
 		return err
 	}
-
 	managedCluster = managedCluster.DeepCopy()
-	fmt.Printf("taints controller begin %+v", managedCluster)
-
 	newTaints := managedCluster.Spec.Taints
-	if meta.IsStatusConditionTrue(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable) {
-		fmt.Println("taints ManagedClusterConditionAvailable")
+
+	fmt.Printf("!!! taintsController start. cluster : %+v\n", managedCluster)
+
+	switch {
+	case meta.IsStatusConditionTrue(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable):
 		newTaints, _ = c.deleteTaintAndJudgeExist(newTaints, "",
 			v1.ManagedClusterTaintUnreachable, v1.ManagedClusterTaintUnavailable)
-	} else if meta.IsStatusConditionFalse(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable) {
+	case meta.IsStatusConditionFalse(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable):
 		var exist bool
-		fmt.Println("taints ManagedClusterTaintUnreachable")
-		newTaints, exist = c.deleteTaintAndJudgeExist(newTaints, v1.ManagedClusterTaintUnavailable, v1.ManagedClusterTaintUnreachable)
+		newTaints, exist = c.deleteTaintAndJudgeExist(newTaints,
+			v1.ManagedClusterTaintUnavailable, v1.ManagedClusterTaintUnreachable)
 		if !exist {
 			t1 := v1.Taint{
 				Key:    v1.ManagedClusterTaintUnavailable,
-				Value:  "",
+				Value:  ConditionFalse,
 				Effect: v1.TaintEffectNoSelect,
 				TimeAdded: metav1.Time{
 					Time: time.Now(),
@@ -83,14 +88,19 @@ func (c *taintsController) sync(ctx context.Context, syncCtx factory.SyncContext
 			}
 			newTaints = append(newTaints, t1)
 		}
-	} else {
+	case c.isIsStatusConditionUnknown(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable) ||
+		meta.FindStatusCondition(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable) == nil:
 		var exist bool
-		fmt.Println("taints ManagedClusterTaintUnavailable")
-		newTaints, exist = c.deleteTaintAndJudgeExist(newTaints, v1.ManagedClusterTaintUnreachable, v1.ManagedClusterTaintUnavailable)
+		newTaints, exist = c.deleteTaintAndJudgeExist(newTaints,
+			v1.ManagedClusterTaintUnreachable, v1.ManagedClusterTaintUnavailable)
+		value := ConditionUnknown
+		if meta.FindStatusCondition(managedCluster.Status.Conditions, v1.ManagedClusterConditionAvailable) == nil {
+			value = NoCondition
+		}
 		if !exist {
 			t1 := v1.Taint{
 				Key:    v1.ManagedClusterTaintUnreachable,
-				Value:  "",
+				Value:  value,
 				Effect: v1.TaintEffectNoSelect,
 				TimeAdded: metav1.Time{
 					Time: time.Now(),
@@ -99,18 +109,14 @@ func (c *taintsController) sync(ctx context.Context, syncCtx factory.SyncContext
 			newTaints = append(newTaints, t1)
 		}
 	}
+	if c.isTaintsEqual(managedCluster.Spec.Taints, newTaints) {
+		return nil
+	}
 
 	managedCluster.Spec.Taints = newTaints
-	fmt.Printf("taints controller before update---- %+v", managedCluster)
+	fmt.Printf("!!! before update. cluster : %+v\n", managedCluster.Spec.Taints)
 	managedCluster, err = c.clusterClient.ClusterV1().ManagedClusters().Update(ctx, managedCluster, metav1.UpdateOptions{})
-	if err != nil {
-		fmt.Printf("err %+v", err)
-	}
-	k, err := c.clusterLister.Get(managedClusterName)
-	if err != nil {
-		fmt.Printf("-----------------err %+v", err)
-	}
-	fmt.Printf("taints controller update %+v", k)
+	fmt.Printf("!!! after update. cluster : %+v\n", managedCluster.Spec.Taints)
 	return err
 }
 
@@ -135,4 +141,31 @@ func (c *taintsController) deleteTaintAndJudgeExist(taints []v1.Taint, isExistKe
 	}
 
 	return ans, exist
+}
+
+func (c *taintsController) isIsStatusConditionUnknown(conditions []metav1.Condition, conditionType string) bool {
+	return meta.IsStatusConditionPresentAndEqual(conditions, conditionType, metav1.ConditionUnknown)
+}
+
+func (c *taintsController) isTaintsEqual(taints1 []v1.Taint, taints2 []v1.Taint) bool {
+
+	if len(taints1) != len(taints2) {
+		return false
+	}
+
+	if (taints1 == nil) != (taints2 == nil) {
+		return false
+	}
+
+	if len(taints2) == 0 && len(taints1) == 0 {
+		return true
+	}
+
+	for i, v := range taints1 {
+		if v != taints2[i] {
+			return false
+		}
+	}
+
+	return true
 }

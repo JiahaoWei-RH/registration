@@ -41,7 +41,7 @@ func TestSyncTaintCluster(t *testing.T) {
 				taints := []v1.Taint{
 					{
 						Key:    v1.ManagedClusterTaintUnavailable,
-						Value:  "",
+						Value:  ConditionFalse,
 						Effect: v1.TaintEffectNoSelect,
 						// Ignore the assertion of time
 						TimeAdded: managedCluster.Spec.Taints[0].TimeAdded,
@@ -58,10 +58,9 @@ func TestSyncTaintCluster(t *testing.T) {
 				managedCluster := (actions[0].(clienttesting.UpdateActionImpl).Object).(*v1.ManagedCluster)
 				taints := []v1.Taint{
 					{
-						Key:    v1.ManagedClusterTaintUnreachable,
-						Value:  "",
-						Effect: v1.TaintEffectNoSelect,
-						// Ignore the assertion of time
+						Key:       v1.ManagedClusterTaintUnreachable,
+						Value:     NoCondition,
+						Effect:    v1.TaintEffectNoSelect,
 						TimeAdded: managedCluster.Spec.Taints[0].TimeAdded,
 					},
 				}
@@ -76,10 +75,9 @@ func TestSyncTaintCluster(t *testing.T) {
 				managedCluster := (actions[0].(clienttesting.UpdateActionImpl).Object).(*v1.ManagedCluster)
 				taints := []v1.Taint{
 					{
-						Key:    v1.ManagedClusterTaintUnreachable,
-						Value:  "",
-						Effect: v1.TaintEffectNoSelect,
-						// Ignore the assertion of time
+						Key:       v1.ManagedClusterTaintUnreachable,
+						Value:     ConditionUnknown,
+						Effect:    v1.TaintEffectNoSelect,
 						TimeAdded: managedCluster.Spec.Taints[0].TimeAdded,
 					},
 				}
